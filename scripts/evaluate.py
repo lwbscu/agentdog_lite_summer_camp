@@ -696,34 +696,35 @@ def write_eval_tensorboard_metrics(
     metrics: dict[str, Any],
     actual_batch_size: int,
     failure_analysis: str,
+    step: int = 0,
 ) -> None:
     group = method_metric_group(method)
-    writer.add_scalar(f"{dataset_name}/Acc", metrics["accuracy"], 0)
-    writer.add_scalar(f"{dataset_name}/F1score_macro", metrics["macro_f1"], 0)
-    writer.add_scalar(f"{dataset_name}/avg_output_tokens", metrics["avg_output_tokens"], 0)
-    writer.add_scalar(f"{dataset_name}/invalid_output_rate", metrics["invalid_output_rate"], 0)
-    writer.add_scalar(f"{dataset_name}/inference_seconds", metrics["inference_seconds"], 0)
+    writer.add_scalar(f"{dataset_name}/Acc", metrics["accuracy"], step)
+    writer.add_scalar(f"{dataset_name}/F1score_macro", metrics["macro_f1"], step)
+    writer.add_scalar(f"{dataset_name}/avg_output_tokens", metrics["avg_output_tokens"], step)
+    writer.add_scalar(f"{dataset_name}/invalid_output_rate", metrics["invalid_output_rate"], step)
+    writer.add_scalar(f"{dataset_name}/inference_seconds", metrics["inference_seconds"], step)
     writer.add_scalar(
         f"{dataset_name}/avg_latency_seconds_per_sample",
         metrics["avg_latency_seconds_per_sample"],
-        0,
+        step,
     )
     writer.add_scalar(
         f"{dataset_name}/throughput_samples_per_second",
         metrics["throughput_samples_per_second"],
-        0,
+        step,
     )
-    writer.add_scalar(f"{dataset_name}/actual_eval_batch_size", actual_batch_size, 0)
+    writer.add_scalar(f"{dataset_name}/actual_eval_batch_size", actual_batch_size, step)
     for key in FAILURE_CATEGORY_LABELS:
         count_key = f"failure_{key}_count"
         rate_key = f"failure_{key}_rate"
         if count_key in metrics:
-            writer.add_scalar(f"{dataset_name}/{count_key}", metrics[count_key], 0)
+            writer.add_scalar(f"{dataset_name}/{count_key}", metrics[count_key], step)
         if rate_key in metrics:
-            writer.add_scalar(f"{dataset_name}/{rate_key}", metrics[rate_key], 0)
-    writer.add_scalar(f"{group}/{dataset_name}/accuracy", metrics["accuracy"], 0)
-    writer.add_scalar(f"{group}/{dataset_name}/f1_score", metrics["macro_f1"], 0)
-    writer.add_text(f"{dataset_name}/failure_case_analysis", failure_analysis, 0)
+            writer.add_scalar(f"{dataset_name}/{rate_key}", metrics[rate_key], step)
+    writer.add_scalar(f"{group}/{dataset_name}/accuracy", metrics["accuracy"], step)
+    writer.add_scalar(f"{group}/{dataset_name}/f1_score", metrics["macro_f1"], step)
+    writer.add_text(f"{dataset_name}/failure_case_analysis", failure_analysis, step)
 
 
 def evaluate_method(

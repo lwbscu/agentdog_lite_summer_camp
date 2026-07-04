@@ -500,6 +500,12 @@ class CheckpointEvalManager:
         self.history_md = self.output_dir / "eval_history.md"
         self.sft_writer = None
         self.sft_log_dir = sft_log_dir
+        self.eval_log_dir = make_timestamped_log_dir(
+            "only_eval",
+            f"{config['run_name']}_checkpoint_eval",
+            timestamp=config.get("run_timestamp"),
+            create=False,
+        )
         self.entries: list[dict[str, Any]] = []
         self.last_checkpoint_step: int | None = None
 
@@ -612,7 +618,8 @@ class CheckpointEvalManager:
             "datasets": dict(self.config["eval"]["datasets"]),
         }
         apply_test_data_dir(eval_config, self.config["eval"].get("test_data_dir"))
-        log_dir = make_timestamped_log_dir("only_eval", f"qwen35_full_sft_step{step}")
+        log_dir = self.eval_log_dir
+        log_dir.mkdir(parents=True, exist_ok=True)
         writer = SummaryWriter(log_dir=str(log_dir))
         stack = {"torch": self.torch}
         was_training = model.training
@@ -639,7 +646,7 @@ class CheckpointEvalManager:
                 actual_batch_sizes.append(actual_batch_size)
                 for metric_name, value in metrics.items():
                     if isinstance(value, (int, float)):
-                        writer.add_scalar(f"{dataset_name}/{metric_name}", value, 0)
+                        writer.add_scalar(f"{dataset_name}/{metric_name}", value, step)
                         if self.sft_writer is not None:
                             self.sft_writer.add_scalar(
                                 f"checkpoint_eval/{dataset_name}/{metric_name}",
@@ -653,10 +660,11 @@ class CheckpointEvalManager:
                     metrics=metrics,
                     actual_batch_size=actual_batch_size,
                     failure_analysis=failure_analysis,
+                    step=step,
                 )
             overall_accuracy, mean_macro_f1 = combined_eval_scores(dataset_metrics)
-            writer.add_scalar("combined/overall_accuracy", overall_accuracy, 0)
-            writer.add_scalar("combined/mean_macro_f1", mean_macro_f1, 0)
+            writer.add_scalar("combined/overall_accuracy", overall_accuracy, step)
+            writer.add_scalar("combined/mean_macro_f1", mean_macro_f1, step)
             if self.sft_writer is not None:
                 self.sft_writer.add_scalar("checkpoint_eval/combined/overall_accuracy", overall_accuracy, step)
                 self.sft_writer.add_scalar("checkpoint_eval/combined/mean_macro_f1", mean_macro_f1, step)
@@ -672,7 +680,7 @@ class CheckpointEvalManager:
                     ensure_ascii=False,
                     indent=2,
                 ),
-                0,
+                step,
             )
         finally:
             self.tokenizer.padding_side = old_padding_side
@@ -860,6 +868,7 @@ def main() -> None:
     config["output_dir"] = str(output_dir)
     effective_batch = assert_effective_batch(config)
     run_timestamp = resolve_shared_run_timestamp(output_dir)
+    config["run_timestamp"] = run_timestamp
 
     stack = import_training_stack()
     torch = stack["torch"]
