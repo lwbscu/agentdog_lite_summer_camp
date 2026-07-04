@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-REQUIRED_FOR_EVAL = ["torch", "transformers", "peft", "yaml"]
+REQUIRED_FOR_EVAL = ["torch", "transformers", "peft", "yaml", "tensorboard"]
 REQUIRED_FOR_TRAIN = REQUIRED_FOR_EVAL + ["datasets", "trl", "sklearn", "pandas"]
 
 MODEL_DIRS = [
@@ -19,10 +19,10 @@ MODEL_DIRS = [
 ]
 
 DATA_FILES = [
-    Path("data/raw/agentdog_training/AgentDoG-BinarySafety/train.json"),
-    Path("data/raw/agentdog_training/AgentDoG-FineGrainedTaxonomy/train.json"),
-    Path("data/raw/summer_camp_teseset/summer_camp_ATBench300.json"),
-    Path("data/raw/summer_camp_teseset/summer_camp_rjudge.json"),
+    Path("data/AgentDoG1.0-Training-Data/AgentDoG-BinarySafety/train.json"),
+    Path("data/AgentDoG1.0-Training-Data/AgentDoG-FineGrainedTaxonomy/train.json"),
+    Path("data/2026_summer_camp_teseset/summer_camp_ATBench300.json"),
+    Path("data/2026_summer_camp_teseset/summer_camp_rjudge.json"),
     Path("data/processed/train_mixed_train.jsonl"),
     Path("data/processed/train_mixed_dev.jsonl"),
 ]
@@ -30,8 +30,8 @@ DATA_FILES = [
 
 def check_python() -> list[str]:
     issues = []
-    if not ((3, 10) <= sys.version_info[:2] < (3, 12)):
-        issues.append(f"Python must be >=3.10,<3.12, got {sys.version.split()[0]}")
+    if not ((3, 10) <= sys.version_info[:2] < (3, 13)):
+        issues.append(f"Python must be >=3.10,<3.13, got {sys.version.split()[0]}")
     return issues
 
 
@@ -93,4 +93,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from typing import Any
 
 
@@ -25,16 +26,41 @@ FORBIDDEN_EVAL_FIELDS = {
 BEGIN_MARKER = "<BEGIN TRAJECTORY>"
 END_MARKER = "<END TRAJECTORY>"
 
+_TRAJECTORY_EXTRACTION_STATS = {"fallback_marker_missing_count": 0}
+
+
+def reset_trajectory_extraction_stats() -> None:
+    _TRAJECTORY_EXTRACTION_STATS["fallback_marker_missing_count"] = 0
+
+
+def get_trajectory_extraction_stats() -> dict[str, int]:
+    return dict(_TRAJECTORY_EXTRACTION_STATS)
+
 
 def extract_trajectory_from_instruction(instruction: str) -> str:
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise RuntimeError("Training instruction is empty; cannot extract trajectory.")
+
     pattern = re.compile(
         rf"{re.escape(BEGIN_MARKER)}\s*(.*?)\s*{re.escape(END_MARKER)}",
         flags=re.DOTALL,
     )
     match = pattern.search(instruction)
     if not match:
-        raise ValueError("Could not find trajectory markers in training instruction.")
-    return match.group(1).strip()
+        _TRAJECTORY_EXTRACTION_STATS["fallback_marker_missing_count"] += 1
+        print(
+            "[trajectory] WARNING: missing trajectory markers; using full instruction as trajectory.",
+            file=sys.stderr,
+        )
+        fallback = instruction.strip()
+        if not fallback:
+            raise RuntimeError("Fallback trajectory is empty after marker-missing recovery.")
+        return fallback
+
+    trajectory = match.group(1).strip()
+    if not trajectory:
+        raise RuntimeError("Extracted trajectory is empty between trajectory markers.")
+    return trajectory
 
 
 def normalize_gold_label(value: Any) -> str:
@@ -96,7 +122,15 @@ def format_contents(contents: Any) -> str:
 
 
 def format_eval_trajectory(example: dict[str, Any], dataset: str) -> str:
-    allowed = {k: v for k, v in example.items() if k not in FORBIDDEN_EVAL_FIELDS}
+    dataset_key = dataset.lower()
+    if dataset_key == "atbench":
+        allowed_keys = {"tool_used", "contents"}
+    elif dataset_key == "rjudge":
+        allowed_keys = {"scenario", "profile", "goal", "contents"}
+    else:
+        allowed_keys = set(example) - FORBIDDEN_EVAL_FIELDS
+
+    allowed = {k: v for k, v in example.items() if k in allowed_keys}
     lines: list[str] = []
 
     profile = allowed.get("profile")
@@ -117,8 +151,13 @@ def format_eval_trajectory(example: dict[str, Any], dataset: str) -> str:
         lines.append(stringify(scenario))
         lines.append("")
 
+    goal = allowed.get("goal")
+    if goal:
+        lines.append("=== Goal ===")
+        lines.append(stringify(goal))
+        lines.append("")
+
     if "contents" not in allowed:
         raise ValueError(f"Missing contents in {dataset} example id={allowed.get('id')!r}")
     lines.append(format_contents(allowed["contents"]))
     return "\n".join(lines).strip()
-

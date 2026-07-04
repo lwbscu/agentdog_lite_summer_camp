@@ -1,33 +1,44 @@
-run_name: our_agentdog15_continued_lora_r8
+run_name: our_agentdog15_continued_lora_h800
 base_model: models/AgentDoG1.5-Qwen3.5-0.8B
 train_file: data/processed/train_mixed_train.jsonl
 dev_file: data/processed/train_mixed_dev.jsonl
-output_dir: outputs/our_agentdog15_continued_lora_r8
-max_seq_len: 8192
-expected_effective_batch_size: 64
+output_dir: outputs/our_agentdog15_continued_lora_h800
+
+max_seq_len: 16384
+expected_effective_batch_size: 128
+
 training:
-  per_device_train_batch_size: 1
-  per_device_eval_batch_size: 1
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
   gradient_accumulation_steps: 64
   learning_rate: 5.0e-6
   num_train_epochs: 3
   warmup_ratio: 0.03
   lr_scheduler_type: cosine
   bf16: true
+  tf32: true
   gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
   save_strategy: steps
   eval_strategy: steps
-  eval_steps: 100
-  save_steps: 100
-  save_total_limit: 3
+  eval_steps: 25
+  save_steps: 25
+  save_total_limit: 2
   load_best_model_at_end: true
   metric_for_best_model: eval_loss
   greater_is_better: false
-  logging_steps: 10
+  logging_steps: 5
   report_to: tensorboard
+  optim: adamw_torch
+  max_grad_norm: 1.0
+  dataloader_num_workers: 8
+  dataloader_pin_memory: true
+  group_by_length: true
+
 lora:
-  r: 8
-  lora_alpha: 32
+  r: 32
+  lora_alpha: 64
   lora_dropout: 0.05
   target_modules:
     - q_proj

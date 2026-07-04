@@ -24,7 +24,7 @@ training:
   metric_for_best_model: eval_loss
   greater_is_better: false
   logging_steps: 10
-  report_to: none
+  report_to: tensorboard
 lora:
   r: 16
   lora_alpha: 32

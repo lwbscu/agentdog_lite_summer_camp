@@ -3,15 +3,56 @@ methods:
     model_path: models/Qwen3.5-0.8B
     adapter_path:
     output_dir: outputs/baseline_qwen35_08b
+
   agentdog15_08b_reference:
     model_path: models/AgentDoG1.5-Qwen3.5-0.8B
     adapter_path:
     output_dir: outputs/reference_agentdog15_08b
+
+  agentdog15_fg_08b_reference:
+    model_path: models/AgentDoG1.5-FG-Qwen3.5-0.8B
+    adapter_path:
+    output_dir: outputs/reference_agentdog15_fg_08b
+
   our_agentdog15_continued_lora:
     model_path: models/AgentDoG1.5-Qwen3.5-0.8B
-    adapter_path: outputs/our_agentdog15_continued_lora
+    adapter_path: outputs/our_agentdog15_continued_lora_h800
     output_dir: outputs/final_continued_lora
-datasets:
-  atbench: data/raw/summer_camp_teseset/summer_camp_ATBench300.json
-  rjudge: data/raw/summer_camp_teseset/summer_camp_rjudge.json
 
+  our_agentdog15_continued_lora_r16:
+    model_path: models/AgentDoG1.5-Qwen3.5-0.8B
+    adapter_path: outputs/our_agentdog15_continued_lora_h800_r16
+    output_dir: outputs/final_continued_lora_r16
+
+  our_agentdog15_continued_lora_lr1e5:
+    model_path: models/AgentDoG1.5-Qwen3.5-0.8B
+    adapter_path: outputs/our_agentdog15_continued_lora_h800_lr1e5
+    output_dir: outputs/final_continued_lora_lr1e5
+
+  dll_qwen35_agentdog_sft_lora:
+    model_path: models/Qwen3.5-0.8B
+    adapter_path: outputs/dll_qwen35_agentdog_sft_lora_h800
+    output_dir: outputs/dll_qwen35_agentdog_sft_lora_eval
+
+  qwen35_full_sft_llamafactory_best:
+    model_path: outputs/qwen35_full_sft_llamafactory_h800/best_checkpoint
+    adapter_path:
+    output_dir: outputs/qwen35_full_sft_llamafactory_h800/eval_best
+
+  qwen35_full_sft_llamafactory_latest:
+    model_path: outputs/qwen35_full_sft_llamafactory_h800/latest_checkpoint
+    adapter_path:
+    output_dir: outputs/qwen35_full_sft_llamafactory_h800/eval_latest
+
+datasets:
+  atbench: /root/autodl-tmp/agentdog_lite_summer_camp/data/2026_summer_camp_teseset/summer_camp_ATBench300.json
+  rjudge: /root/autodl-tmp/agentdog_lite_summer_camp/data/2026_summer_camp_teseset/summer_camp_rjudge.json
+
+eval:
+  eval_batch_size: 64
+  max_input_tokens: 16384
+  max_new_tokens: 32
+  sort_by_length: true
+  auto_reduce_batch_on_oom: true
+  torch_dtype: bfloat16
+  attn_implementation: sdpa

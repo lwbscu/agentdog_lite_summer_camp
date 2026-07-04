@@ -2,11 +2,16 @@ AGENTS.md
 codex日志.md
 
 # Heavy/generated artifacts
+data/
+logs/
 models/
 outputs/
-data/raw/
-data/processed/
+report/
 third_party/AgentDoG/
+src/*.egg-info/
+*.log
+*.pid
+/学习/
 
 # Python/runtime cache
 __pycache__/

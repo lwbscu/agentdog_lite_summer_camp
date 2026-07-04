@@ -18,20 +18,49 @@
 
 ## 环境安装
 
-推荐使用 Python 3.10/3.11。当前项目的训练脚本会拒绝 Python 3.12+，避免深度学习依赖装上但行为不稳定。
+推荐主环境：
+
+- Python 3.11
+- PyTorch 2.8.0+cu128
+- bf16 LoRA
+- SDPA attention
+- 不强依赖 `flash-attn` / `deepspeed` / `bitsandbytes`
+
+当前比赛主环境为 conda env `agentdog311`。训练和评测脚本支持 Python >=3.10,<3.13，但默认运行环境使用 `agentdog311`。
 
 ```bash
-conda env create -f environment.yml
-conda activate agentdog-lite
-pip install -e .
+conda create -n agentdog311 python=3.11 -y
+conda activate agentdog311
+python -m pip install -U pip setuptools wheel packaging ninja
+python -m pip install \
+  torch==2.8.0 \
+  torchvision==0.23.0 \
+  torchaudio==2.8.0 \
+  --index-url https://download.pytorch.org/whl/cu128
+source scripts/setup_h800_env.sh
+python -m pip install -U \
+  "transformers" \
+  "accelerate" \
+  "datasets" \
+  "peft" \
+  "trl" \
+  "huggingface-hub" \
+  "safetensors" \
+  "sentencepiece" \
+  "protobuf" \
+  "scikit-learn>=1.5.0" \
+  "pandas>=2.2.0" \
+  "pyyaml>=6.0.1" \
+  "tqdm" \
+  "pytest" \
+  "tensorboard" \
+  "openai"
+python -m pip install -e .
 ```
 
-如果复用已有环境，至少需要：
+不强装 `flash_attn`、`deepspeed`、`bitsandbytes`，也不需要 `nvcc`。
 
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
+火山 8xL40 服务器使用 PyTorch cu121，不使用 cu128；完整部署提示词见 `docs/volcano_l40_setup_prompt.md`。
 
 ## 官方仓库
 
@@ -93,32 +122,33 @@ data/processed/train_mixed.jsonl
 data/processed/train_mixed_train.jsonl
 data/processed/train_mixed_dev.jsonl
 data/processed/build_summary.json
+data/processed/token_length_summary.json
 ```
 
 `train_mixed` 优先按 70% binary、20% diagnostic、10% hard boundary 构造；如果 hard boundary 数量不足以支撑稳定训练规模，则按规则回退到 75% binary、25% diagnostic。dev split 来自训练集内部，按 task/source/judgment 分层，绝不使用 summer camp test set 做 dev、few-shot 或 prompt tuning。
 
 ## Continued LoRA 训练
 
-主线配置：
+H800 主线配置：
 
 ```bash
-python scripts/train_lora.py --config configs/train_agentdog15_continued_lora.yaml
+python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_h800.yaml
 ```
 
 对照配置：
 
 ```bash
-python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_lr1e5.yaml
-python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_r8.yaml
+python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_h800_r16.yaml
+python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_h800_lr1e5.yaml
 ```
 
 如现场规则不允许从 AgentDoG1.5 初始化，保留 fallback：
 
 ```bash
-python scripts/train_lora.py --config configs/train_qwen35_fallback_lora.yaml
+python scripts/train_lora.py --config configs/train_qwen35_fallback_lora_h800.yaml
 ```
 
-训练脚本会校验 effective batch size 必须为 64。默认设置为 `per_device_train_batch_size=1`、`gradient_accumulation_steps=64`、单卡有效 batch 64。
+训练脚本会校验 H800 配置的 effective batch size 必须为 128。默认设置为 `per_device_train_batch_size=8`、`gradient_accumulation_steps=16`、单卡有效 batch 128，`max_seq_len=16384`。训练只对 assistant JSON target 计算 loss，system/user/trajectory prompt token 的 label 均为 `-100`。每次训练都会写 TensorBoard 日志到 `logs/sft/李文博_<run_name>_<YYYYmmdd_HHMMSS>/`。
 
 导出最终 adapter：
 
@@ -136,6 +166,8 @@ python scripts/export_final_adapter.py \
 python scripts/evaluate.py --method qwen35_08b_baseline
 python scripts/evaluate.py --method agentdog15_08b_reference
 ```
+
+每次评测都会写 TensorBoard 日志到 `logs/only_eval/李文博_<method>_<YYYYmmdd_HHMMSS>/`，并在对应 `summary.json` 中记录 `tensorboard_log_dir`。
 
 ## Final Eval
 
@@ -192,4 +224,3 @@ label, reason, risk_source, failure_mode, harm_type, risk_description, risk_type
 ```
 
 禁止使用 summer camp test set 训练、做 few-shot、调 prompt 或选 checkpoint。
-

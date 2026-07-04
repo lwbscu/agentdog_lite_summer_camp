@@ -23,7 +23,25 @@ from agentdog_lite.prompts import (
     DIAGNOSTIC_SYSTEM_PROMPT,
     judgment_target,
 )
-from agentdog_lite.trajectory import extract_trajectory_from_instruction, normalize_gold_label
+from agentdog_lite.loss_masking import build_token_length_summary
+from agentdog_lite.trajectory import (
+    extract_trajectory_from_instruction,
+    get_trajectory_extraction_stats,
+    normalize_gold_label,
+    reset_trajectory_extraction_stats,
+)
+
+
+TRAINING_FILE_CANDIDATES = {
+    "AgentDoG-BinarySafety": [
+        Path("data/AgentDoG1.0-Training-Data/AgentDoG-BinarySafety/train.json"),
+        Path("data/raw/agentdog_training/AgentDoG-BinarySafety/train.json"),
+    ],
+    "AgentDoG-FineGrainedTaxonomy": [
+        Path("data/AgentDoG1.0-Training-Data/AgentDoG-FineGrainedTaxonomy/train.json"),
+        Path("data/raw/agentdog_training/AgentDoG-FineGrainedTaxonomy/train.json"),
+    ],
+}
 
 
 def read_json(path: Path) -> Any:
@@ -39,6 +57,42 @@ def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> int:
             f.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
             count += 1
     return count
+
+
+def resolve_training_file(path: Path, dataset_name: str) -> Path:
+    if path.exists():
+        return path
+
+    ordered_candidates = list(TRAINING_FILE_CANDIDATES.get(dataset_name, []))
+    ordered_candidates.extend(
+        [
+            Path("data/AgentDoG1.0-Training-Data/AgentDoG-BinarySafety/train.json"),
+            Path("data/AgentDoG1.0-Training-Data/AgentDoG-FineGrainedTaxonomy/train.json"),
+            Path("data/raw/agentdog_training/AgentDoG-BinarySafety/train.json"),
+            Path("data/raw/agentdog_training/AgentDoG-FineGrainedTaxonomy/train.json"),
+        ]
+    )
+    seen: set[Path] = set()
+    for candidate in ordered_candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.exists():
+            print(
+                f"[data] WARNING: {path} not found; using detected {dataset_name} file: {candidate}",
+                file=sys.stderr,
+            )
+            return candidate
+
+    print("[data] Could not resolve training file. Available data files:", file=sys.stderr)
+    data_files = [
+        path
+        for path in Path("data").rglob("*")
+        if path.is_file() and len(path.relative_to("data").parts) <= 4
+    ]
+    for file_path in sorted(data_files):
+        print(file_path, file=sys.stderr)
+    raise FileNotFoundError(f"Could not resolve {dataset_name} training file from {path}")
 
 
 def parse_finegrained_target(text: str) -> dict[str, str]:
@@ -317,14 +371,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--binary-path",
-        default="data/raw/agentdog_training/AgentDoG-BinarySafety/train.json",
+        default="data/AgentDoG1.0-Training-Data/AgentDoG-BinarySafety/train.json",
     )
     parser.add_argument(
         "--finegrained-path",
-        default="data/raw/agentdog_training/AgentDoG-FineGrainedTaxonomy/train.json",
+        default="data/AgentDoG1.0-Training-Data/AgentDoG-FineGrainedTaxonomy/train.json",
     )
     parser.add_argument("--hard-path", default="data/hard_boundary/hard_boundary_seed.json")
     parser.add_argument("--output-dir", default="data/processed")
+    parser.add_argument("--tokenizer-path", default="models/AgentDoG1.5-Qwen3.5-0.8B")
+    parser.add_argument("--max-seq-len", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=20260704)
     parser.add_argument("--dev-ratio", type=float, default=0.10)
     parser.add_argument("--min-hard-for-ratio", type=int, default=100)
@@ -333,8 +389,14 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     output_dir = Path(args.output_dir)
-    binary_rows = load_binary(Path(args.binary_path))
-    diagnostic_rows = load_diagnostic(Path(args.finegrained_path), binary_rows)
+    reset_trajectory_extraction_stats()
+    binary_path = resolve_training_file(Path(args.binary_path), "AgentDoG-BinarySafety")
+    finegrained_path = resolve_training_file(
+        Path(args.finegrained_path),
+        "AgentDoG-FineGrainedTaxonomy",
+    )
+    binary_rows = load_binary(binary_path)
+    diagnostic_rows = load_diagnostic(finegrained_path, binary_rows)
     hard_rows = load_hard_boundary(Path(args.hard_path))
 
     mixed_rows, mixed_summary = build_mixed(
@@ -362,11 +424,46 @@ def main() -> None:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "seed": args.seed,
         "dev_ratio": args.dev_ratio,
+        "paths": {
+            "binary_path": str(binary_path),
+            "finegrained_path": str(finegrained_path),
+            "hard_path": args.hard_path,
+        },
         "files": counts,
         "mixed": mixed_summary,
+        **get_trajectory_extraction_stats(),
     }
+    if build_summary["fallback_marker_missing_count"] > 0:
+        print(
+            "[data] WARNING: fallback_marker_missing_count="
+            f"{build_summary['fallback_marker_missing_count']}; no empty trajectories were emitted.",
+            file=sys.stderr,
+        )
     (output_dir / "build_summary.json").write_text(
         json.dumps(build_summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        from transformers import AutoTokenizer
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("transformers is required to write token_length_summary.json") from exc
+
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
+    token_summary = build_token_length_summary(
+        tokenizer=tokenizer,
+        train_rows=train_rows,
+        dev_rows=dev_rows,
+        max_seq_len=args.max_seq_len,
+    )
+    token_summary.update(
+        {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "tokenizer_path": args.tokenizer_path,
+        }
+    )
+    (output_dir / "token_length_summary.json").write_text(
+        json.dumps(token_summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     print(json.dumps(build_summary, ensure_ascii=False, indent=2))
