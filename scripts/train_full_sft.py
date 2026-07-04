@@ -256,8 +256,10 @@ class EncodedRow:
     source_index: int
     label: str
     input_tokens: int
+    original_input_tokens: int
     prompt_tokens: int
     assistant_tokens: int
+    truncated: bool
 
 
 def encode_assistant_only_no_truncation(
@@ -273,11 +275,28 @@ def encode_assistant_only_no_truncation(
     assistant_ids = full_ids[len(prompt_ids) :]
     if not assistant_ids:
         raise RuntimeError(f"Row {row['source_index']} produced zero assistant tokens.")
+    original_input_tokens = len(full_ids)
+    truncated = False
     if len(full_ids) > max_seq_len:
-        raise RuntimeError(
-            "Full SFT refuses to truncate samples. "
-            f"row={row['source_index']} tokens={len(full_ids)} max_seq_len={max_seq_len}"
-        )
+        max_prompt_len = max_seq_len - len(assistant_ids)
+        marker_ids = encode_text(tokenizer, "\n[TRUNCATED_MIDDLE_FOR_CONTEXT_WINDOW]\n")
+        available = max_prompt_len - len(marker_ids)
+        if available <= 1:
+            raise RuntimeError(
+                "Assistant target is too long to preserve during prompt truncation. "
+                f"row={row['source_index']} assistant_tokens={len(assistant_ids)} "
+                f"max_seq_len={max_seq_len}"
+            )
+        head_len = max(1, int(round(available * 0.30)))
+        tail_len = max(1, available - head_len)
+        prompt_ids = prompt_ids[:head_len] + marker_ids + prompt_ids[-tail_len:]
+        full_ids = prompt_ids + assistant_ids
+        truncated = True
+        if len(full_ids) > max_seq_len:
+            raise RuntimeError(
+                "Prompt truncation failed to fit max_seq_len. "
+                f"row={row['source_index']} tokens={len(full_ids)} max_seq_len={max_seq_len}"
+            )
     labels = [IGNORE_INDEX] * len(prompt_ids) + assistant_ids
     return EncodedRow(
         input_ids=full_ids,
@@ -286,8 +305,10 @@ def encode_assistant_only_no_truncation(
         source_index=int(row["source_index"]),
         label=str(row["label"]),
         input_tokens=len(full_ids),
+        original_input_tokens=original_input_tokens,
         prompt_tokens=len(prompt_ids),
         assistant_tokens=len(assistant_ids),
+        truncated=truncated,
     )
 
 
@@ -305,10 +326,12 @@ def percentile(sorted_values: list[int], q: float) -> int:
 
 def token_summary(encoded: list[EncodedRow]) -> dict[str, Any]:
     lengths = sorted(row.input_tokens for row in encoded)
+    original_lengths = sorted(row.original_input_tokens for row in encoded)
     assistant_lengths = sorted(row.assistant_tokens for row in encoded)
     total = len(lengths)
     return {
         "num_samples": total,
+        "truncated_count": sum(row.truncated for row in encoded),
         "input_tokens": {
             "p50": percentile(lengths, 0.50),
             "p90": percentile(lengths, 0.90),
@@ -316,13 +339,20 @@ def token_summary(encoded: list[EncodedRow]) -> dict[str, Any]:
             "p99": percentile(lengths, 0.99),
             "max": lengths[-1] if lengths else 0,
         },
+        "original_input_tokens": {
+            "p50": percentile(original_lengths, 0.50),
+            "p90": percentile(original_lengths, 0.90),
+            "p95": percentile(original_lengths, 0.95),
+            "p99": percentile(original_lengths, 0.99),
+            "max": original_lengths[-1] if original_lengths else 0,
+        },
         "assistant_tokens": {
             "p50": percentile(assistant_lengths, 0.50),
             "p90": percentile(assistant_lengths, 0.90),
             "max": assistant_lengths[-1] if assistant_lengths else 0,
         },
-        "over_8192_ratio": sum(length > 8192 for length in lengths) / total if total else 0.0,
-        "over_16384_ratio": sum(length > 16384 for length in lengths) / total if total else 0.0,
+        "over_8192_ratio": sum(length > 8192 for length in original_lengths) / total if total else 0.0,
+        "over_16384_ratio": sum(length > 16384 for length in original_lengths) / total if total else 0.0,
     }
 
 
@@ -638,7 +668,7 @@ class CheckpointEvalManager:
                     dataset_name=dataset_name,
                     dataset_path=dataset_path,
                     output_dir=eval_dir,
-                    method="qwen35_full_sft_llamafactory_h800",
+                    method=self.config["run_name"],
                     limit=self.eval_limit,
                     options=self.eval_options,
                 )
@@ -655,7 +685,7 @@ class CheckpointEvalManager:
                             )
                 write_eval_tensorboard_metrics(
                     writer=writer,
-                    method="qwen35_full_sft_llamafactory_h800",
+                    method=self.config["run_name"],
                     dataset_name=dataset_name,
                     metrics=metrics,
                     actual_batch_size=actual_batch_size,

@@ -58,6 +58,30 @@ def test_full_sft_labels_only_train_assistant_json():
 
     assert all(label == IGNORE_INDEX for label in encoded.labels[:first_label_idx])
     assert encoded.labels[first_label_idx:] == encoded.input_ids[first_label_idx:]
+    assert not encoded.truncated
+
+
+def test_full_sft_truncates_prompt_middle_and_preserves_assistant_json():
+    tokenizer = FakeTokenizer()
+    assistant = '{"judgment":"unsafe"}'
+    row = {
+        "source_index": 0,
+        "label": "unsafe",
+        "messages": [
+            {"role": "system", "content": "classify"},
+            {"role": "user", "content": "x" * 500},
+            {"role": "assistant", "content": assistant},
+        ],
+    }
+
+    encoded = encode_assistant_only_no_truncation(tokenizer, row, max_seq_len=160)
+    first_label_idx = next(idx for idx, label in enumerate(encoded.labels) if label != IGNORE_INDEX)
+
+    assert encoded.truncated
+    assert encoded.original_input_tokens > len(encoded.input_ids)
+    assert len(encoded.input_ids) <= 160
+    assert all(label == IGNORE_INDEX for label in encoded.labels[:first_label_idx])
+    assert encoded.labels[first_label_idx:] == [ord(char) for char in f"{assistant}</assistant>"]
 
 
 def test_stratified_split_and_balanced_subset_keep_labels():
