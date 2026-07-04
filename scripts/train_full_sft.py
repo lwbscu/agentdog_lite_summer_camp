@@ -145,7 +145,7 @@ def write_json(path: Path, obj: Any) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def normalize_target(output: Any) -> tuple[str, str]:
+def normalize_target(output: Any, assistant_target_mode: str = "judgment_only") -> tuple[str, str]:
     if not isinstance(output, str) or not output.strip():
         raise RuntimeError("Alpaca output must be a non-empty JSON string.")
     try:
@@ -155,7 +155,16 @@ def normalize_target(output: Any) -> tuple[str, str]:
     if not isinstance(obj, dict):
         raise RuntimeError(f"Assistant output must be a JSON object: {output!r}")
     judgment = str(obj.get("judgment", "")).strip().lower()
-    target = judgment_target(judgment)
+    judgment_only_target = judgment_target(judgment)
+    if assistant_target_mode == "judgment_only":
+        target = judgment_only_target
+    elif assistant_target_mode == "full_json":
+        target = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    else:
+        raise RuntimeError(
+            "assistant_target_mode must be 'judgment_only' or 'full_json', "
+            f"got {assistant_target_mode!r}"
+        )
     return judgment, target
 
 
@@ -163,6 +172,7 @@ def alpaca_row_to_messages(
     row: dict[str, Any],
     source_index: int,
     extract_trajectory: bool,
+    assistant_target_mode: str = "judgment_only",
 ) -> dict[str, Any]:
     missing = [key for key in ("instruction", "input", "output") if key not in row]
     if missing:
@@ -177,7 +187,7 @@ def alpaca_row_to_messages(
         user_content = f"{user_content}\n{row['input']}".strip()
     if not user_content:
         raise RuntimeError(f"Alpaca row {source_index} produced empty user content.")
-    label, target = normalize_target(row["output"])
+    label, target = normalize_target(row["output"], assistant_target_mode=assistant_target_mode)
     return {
         "source_index": source_index,
         "label": label,
@@ -194,12 +204,18 @@ def load_alpaca_sft_rows(
     extract_trajectory: bool = True,
     max_samples: int | None = None,
     seed: int = 42,
+    assistant_target_mode: str = "judgment_only",
 ) -> list[dict[str, Any]]:
     data = read_json(path)
     if not isinstance(data, list):
         raise RuntimeError(f"Expected top-level list in {path}")
     rows = [
-        alpaca_row_to_messages(row, idx, extract_trajectory)
+        alpaca_row_to_messages(
+            row,
+            idx,
+            extract_trajectory,
+            assistant_target_mode=assistant_target_mode,
+        )
         for idx, row in enumerate(data)
     ]
     labels = {row["label"] for row in rows}
@@ -870,6 +886,7 @@ def print_training_header(
     log(f"[train] model_path={config['base_model']}")
     log(f"[train] train_samples={len(train_rows)} dev_samples={len(dev_rows)}")
     log(f"[train] max_seq_len={config['max_seq_len']}")
+    log(f"[train] assistant_target_mode={config.get('assistant_target_mode', 'judgment_only')}")
     log(f"[train] per_device_train_batch_size={training['per_device_train_batch_size']}")
     log(f"[train] gradient_accumulation_steps={training['gradient_accumulation_steps']}")
     log(f"[train] effective_batch={effective_batch}")
@@ -928,6 +945,7 @@ def main() -> None:
         extract_trajectory=bool(config.get("extract_trajectory", True)),
         max_samples=args.max_samples,
         seed=int(config.get("seed", 42)),
+        assistant_target_mode=str(config.get("assistant_target_mode", "judgment_only")),
     )
     train_rows, dev_rows = stratified_train_dev_split(
         rows,
@@ -944,6 +962,7 @@ def main() -> None:
     ]
     token_length_summary = {
         "max_seq_len": int(config["max_seq_len"]),
+        "assistant_target_mode": str(config.get("assistant_target_mode", "judgment_only")),
         "all_samples": len(rows),
         "train": token_summary(train_encoded),
         "dev": token_summary(dev_encoded),

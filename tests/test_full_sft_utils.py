@@ -42,6 +42,26 @@ def test_alpaca_row_extracts_trajectory_and_compacts_target():
     assert converted["messages"][2]["content"] == '{"judgment":"safe"}'
 
 
+def test_alpaca_row_can_keep_full_json_target():
+    row = {
+        "instruction": "prefix <BEGIN TRAJECTORY>\nturns\n<END TRAJECTORY> suffix",
+        "input": "",
+        "output": '{"reasoning": "risk source\\nfailure mode", "judgment": "unsafe"}',
+    }
+    converted = alpaca_row_to_messages(
+        row,
+        source_index=3,
+        extract_trajectory=True,
+        assistant_target_mode="full_json",
+    )
+
+    assert converted["label"] == "unsafe"
+    assert (
+        converted["messages"][2]["content"]
+        == '{"reasoning":"risk source\\nfailure mode","judgment":"unsafe"}'
+    )
+
+
 def test_full_sft_labels_only_train_assistant_json():
     tokenizer = FakeTokenizer()
     row = {

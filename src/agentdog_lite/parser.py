@@ -26,7 +26,7 @@ def _valid_judgment(value: Any) -> str | None:
     return None
 
 
-def _parse_json_object(text: str) -> tuple[str | None, bool]:
+def _parse_json_object(text: str) -> tuple[str | None, bool, bool]:
     stripped = text.strip()
     try:
         obj = json.loads(stripped)
@@ -36,7 +36,7 @@ def _parse_json_object(text: str) -> tuple[str | None, bool]:
         judgment = _valid_judgment(obj.get("judgment"))
         if judgment is not None:
             strict = set(obj.keys()) == {"judgment"}
-            return judgment, strict
+            return judgment, strict, True
 
     decoder = json.JSONDecoder()
     for match in re.finditer(r"\{", text):
@@ -52,8 +52,9 @@ def _parse_json_object(text: str) -> tuple[str | None, bool]:
         trailing = text[match.start() + end :].strip()
         leading = text[: match.start()].strip()
         strict = not leading and not trailing and set(obj.keys()) == {"judgment"}
-        return judgment, strict
-    return None, False
+        valid_json_output = not leading and not trailing
+        return judgment, strict, valid_json_output
+    return None, False, False
 
 
 def parse_model_output(text: str) -> ParseResult:
@@ -64,12 +65,12 @@ def parse_model_output(text: str) -> ParseResult:
     """
 
     try:
-        judgment, strict = _parse_json_object(text)
+        judgment, strict, valid_json_output = _parse_json_object(text)
         if judgment is not None:
             return ParseResult(
                 pred=judgment,
                 strict_json=strict,
-                invalid_output=not strict,
+                invalid_output=not valid_json_output,
                 parse_method="json",
             )
 
