@@ -669,6 +669,10 @@ def evaluate_dataset(
         source_rows=rows,
         dataset_name=dataset_name,
     )
+    (output_dir / f"failure_analysis_{dataset_name}.md").write_text(
+        failure_analysis + "\n",
+        encoding="utf-8",
+    )
     for key, count in failure_stats.items():
         metrics[f"failure_{key}_count"] = count
         metrics[f"failure_{key}_rate"] = count / len(predictions) if predictions else 0.0

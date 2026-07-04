@@ -720,7 +720,7 @@ class CheckpointEvalManager:
             writer.close()
 
         summary = {
-            "method": "qwen35_full_sft_llamafactory_h800",
+            "method": self.config["run_name"],
             "model_path": str(checkpoint_dir),
             "adapter_path": None,
             "output_dir": str(eval_dir),
