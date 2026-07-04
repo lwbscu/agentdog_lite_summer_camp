@@ -1,0 +1,17 @@
+methods:
+  qwen35_08b_baseline:
+    model_path: models/Qwen3.5-0.8B
+    adapter_path:
+    output_dir: outputs/baseline_qwen35_08b
+  agentdog15_08b_reference:
+    model_path: models/AgentDoG1.5-Qwen3.5-0.8B
+    adapter_path:
+    output_dir: outputs/reference_agentdog15_08b
+  our_agentdog15_continued_lora:
+    model_path: models/AgentDoG1.5-Qwen3.5-0.8B
+    adapter_path: outputs/our_agentdog15_continued_lora
+    output_dir: outputs/final_continued_lora
+datasets:
+  atbench: data/raw/summer_camp_teseset/summer_camp_ATBench300.json
+  rjudge: data/raw/summer_camp_teseset/summer_camp_rjudge.json
+

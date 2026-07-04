@@ -1,0 +1,24 @@
+AGENTS.md
+codex日志.md
+
+# Heavy/generated artifacts
+models/
+outputs/
+data/raw/
+data/processed/
+third_party/AgentDoG/
+
+# Python/runtime cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor/local files
+.vscode/
+.vscode/*.db
+.vscode/*.db-*
+.env
+.venv/
+venv/
