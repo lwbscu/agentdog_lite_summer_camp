@@ -1,0 +1,51 @@
+run_name: qwen35_full_sft_atbench_rjudge_clean_h800
+base_model: models/Qwen3.5-0.8B
+train_file: data/Proessed_train_dataset/atbench_rjudge_clean_alpaca.json
+output_dir: outputs/qwen35_full_sft_atbench_rjudge_clean_h800
+
+max_seq_len: 8192
+expected_effective_batch_size: 128
+dev_ratio: 0.10
+seed: 42
+extract_trajectory: true
+assistant_target_mode: judgment_only
+checkpoint_interval_seconds: 1800
+attn_implementation: sdpa
+
+training:
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+  gradient_accumulation_steps: 64
+  learning_rate: 5.0e-6
+  num_train_epochs: 3
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  bf16: true
+  tf32: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  eval_strategy: steps
+  eval_steps: 5
+  logging_steps: 1
+  report_to: tensorboard
+  optim: adamw_torch
+  max_grad_norm: 1.0
+  dataloader_num_workers: 8
+  dataloader_pin_memory: true
+  group_by_length: true
+  load_best_model_at_end: false
+  save_total_limit: 1
+
+eval:
+  test_data_dir: /root/autodl-tmp/agentdog_lite_summer_camp/data/2026_summer_camp_teseset
+  datasets:
+    atbench: /root/autodl-tmp/agentdog_lite_summer_camp/data/2026_summer_camp_teseset/summer_camp_ATBench300.json
+    rjudge: /root/autodl-tmp/agentdog_lite_summer_camp/data/2026_summer_camp_teseset/summer_camp_rjudge.json
+  eval_batch_size: 64
+  max_input_tokens: 16384
+  max_new_tokens: 32
+  sort_by_length: true
+  auto_reduce_batch_on_oom: true
+  torch_dtype: bfloat16
+  attn_implementation: sdpa
