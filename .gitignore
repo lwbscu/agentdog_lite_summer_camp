@@ -9,6 +9,7 @@ outputs/
 report/
 third_party/AgentDoG/
 src/*.egg-info/
+configs/prompts/*.txt
 *.log
 *.pid
 /学习/

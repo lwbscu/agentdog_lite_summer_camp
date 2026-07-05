@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -35,6 +36,12 @@ LEAKAGE_FIELD_NAMES = (
     "risk_description",
     "risk_type",
 )
+
+ACTIVE_SYSTEM_PROMPT = BINARY_SYSTEM_PROMPT
+ACTIVE_SYSTEM_PROMPT_SOURCE = "default:BINARY_SYSTEM_PROMPT"
+ACTIVE_SYSTEM_PROMPT_SHA256 = hashlib.sha256(
+    BINARY_SYSTEM_PROMPT.encode("utf-8")
+).hexdigest()
 
 FAILURE_CATEGORY_LABELS = {
     "ignored_middle_tool_calls": "是否忽略了中间工具调用",
@@ -209,7 +216,7 @@ def load_model(
 
 def make_prompt(tokenizer: Any, trajectory: str) -> str:
     messages = [
-        {"role": "system", "content": BINARY_SYSTEM_PROMPT},
+        {"role": "system", "content": ACTIVE_SYSTEM_PROMPT},
         {"role": "user", "content": trajectory},
     ]
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -797,6 +804,8 @@ def evaluate_method(
                     "model_path": spec["model_path"],
                     "adapter_path": spec.get("adapter_path"),
                     "options": options.__dict__,
+                    "system_prompt_source": ACTIVE_SYSTEM_PROMPT_SOURCE,
+                    "system_prompt_sha256": ACTIVE_SYSTEM_PROMPT_SHA256,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -819,6 +828,8 @@ def evaluate_method(
         "torch_dtype": options.torch_dtype,
         "attn_implementation": options.attn_implementation,
         "tensorboard_log_dir": str(log_dir),
+        "system_prompt_source": ACTIVE_SYSTEM_PROMPT_SOURCE,
+        "system_prompt_sha256": ACTIVE_SYSTEM_PROMPT_SHA256,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "datasets": dataset_metrics,
     }
@@ -846,7 +857,19 @@ def main() -> None:
         default=None,
     )
     parser.add_argument("--test-data-dir")
+    parser.add_argument("--system-prompt-file")
     args = parser.parse_args()
+
+    global ACTIVE_SYSTEM_PROMPT, ACTIVE_SYSTEM_PROMPT_SOURCE, ACTIVE_SYSTEM_PROMPT_SHA256
+    if args.system_prompt_file:
+        prompt_path = Path(args.system_prompt_file)
+        ACTIVE_SYSTEM_PROMPT = prompt_path.read_text(encoding="utf-8").strip()
+        if not ACTIVE_SYSTEM_PROMPT:
+            raise ValueError(f"Empty system prompt file: {prompt_path}")
+        ACTIVE_SYSTEM_PROMPT_SOURCE = str(prompt_path)
+        ACTIVE_SYSTEM_PROMPT_SHA256 = hashlib.sha256(
+            ACTIVE_SYSTEM_PROMPT.encode("utf-8")
+        ).hexdigest()
 
     config = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     apply_test_data_dir(config, args.test_data_dir)
