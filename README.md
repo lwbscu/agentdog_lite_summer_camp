@@ -1,5 +1,5 @@
 
-本项目实现 AgentDoG-Lite 题目 1 的高标准方案：最终主是普通 Step 1 Qwen baseline继续 LoRA/SFT 微调。原始 `Qwen/Qwen3.5-0.8B` 只作为比赛对照 baseline；官方 AgentDoG1.5 原始权重是 reference，不叫 baseline。
+本项目实现 AgentDoG-Lite 题目 1 的高标准方案：最终主是普通 Step 1 Qwen baseline继续 LoRA/SFT 微调。原始 `Qwen/Qwen3.5-0.8B` 作为比赛对照 baseline；官方 AgentDoG1.5 原始权重是 reference，不叫 baseline。
 
 当前实验主线同时包含一套全参 Full-SFT + batch eval 闭环：使用本地 H800 环境对 `Qwen3.5-0.8B` 做完整权重 SFT，每约 30 分钟保存 checkpoint 并立即在 summer camp test set 上 batch eval；只保留 best/latest 权重以节省磁盘。当前推荐本地权重入口为：
 
@@ -9,12 +9,7 @@ outputs/qwen35_full_sft_llamafactory_h800/best_checkpoint
 
 注意：本地 `data/`、`models/`、`outputs/`、`logs/`、`report/` 均不提交到 Git。
 
-最终推理输出严格限制为：
 
-```json
- -158,6 +166,58 @@ python scripts/export_final_adapter.py \
---output-dir outputs/final_continued_lora_adapter
-```
 
 ## Full-SFT 训练
 
