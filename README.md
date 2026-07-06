@@ -1,6 +1,13 @@
 # AgentDoG-Lite Summer Camp
 
-本项目实现 AgentDoG-Lite 题目 1 的高标准方案：最终主线从基础模型 `Qwen/Qwen3.5-0.8B` 开始训练，经过 LoRA/SFT 与 Full-SFT 优化，构建面向 Agent 轨迹级安全判断的轻量模型。官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` 仅作为 reference 对照模型，用于比较官方 AgentDoG1.5 原始权重表现。
+模型权重已公开上传至 Hugging Face：
+Full-SFT 
+完整权重版本为https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-full-sft
+LoRA adapter
+版本为https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-lora 
+两个版本均明确从基础模型 `Qwen/Qwen3.5-0.8B` 开始训练，而不是从官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` 初始化，官方 AgentDoG1.5 仅作为 reference 对照。
+
+本项目实现 AgentDoG-Lite 题目 1 的高标准方案：最终主线从基础模型 `Qwen/Qwen3.5-0.8B`（！！！！！结果是从基础模型Qwen3.5-0.8B开始训练，而不是agentdog！！！！！）开始训练，经过 Full-SFT与LoRA/SFT优化，构建面向 Agent 轨迹级安全判断的轻量模型。官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B`，AgentDoG1.5作为对照模型，用于比较表现。
 
 当前实验主线同时包含一套全参 Full-SFT + batch eval 闭环：使用本地 H800 环境对基础模型 `Qwen/Qwen3.5-0.8B` 做完整权重 SFT，每约 30 分钟保存 checkpoint 并立即在 summer camp test set 上 batch eval；只保留 best/latest 权重以节省磁盘。当前推荐本地权重入口为：
 
@@ -95,8 +102,7 @@ python scripts/download_models.py
 | method 名称 | Hugging Face 模型 | 本地路径 |
 |---|---|---|
 | `qwen35_08b_baseline` | `Qwen/Qwen3.5-0.8B` | `models/Qwen3.5-0.8B` |
-| `agentdog15_08b_reference` | `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` | `models/AgentDoG1.5-Qwen3.5-0.8B` |
-| teacher | `AI45Research/AgentDoG1.5-FG-Qwen3.5-0.8B` | `models/AgentDoG1.5-FG-Qwen3.5-0.8B` |
+| `qwen35_08b_reference` | `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` | `models/AgentDoG1.5-Qwen3.5-0.8B` |
 
 ## 数据下载
 
@@ -143,18 +149,6 @@ H800 主线配置：
 python scripts/train_lora.py --config configs/train_qwen35_fallback_lora_h800.yaml
 ```
 
-对照配置：
-
-```bash
-python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_h800_r16.yaml
-python scripts/train_lora.py --config configs/train_agentdog15_continued_lora_h800_lr1e5.yaml
-```
-
-如现场规则不允许从 AgentDoG1.5 初始化，保留 fallback：
-
-```bash
-python scripts/train_lora.py --config configs/train_qwen35_fallback_lora_h800.yaml
-```
 
 训练脚本会校验 H800 配置的 effective batch size 必须为 128。默认设置为 `per_device_train_batch_size=8`、`gradient_accumulation_steps=16`、单卡有效 batch 128，`max_seq_len=16384`。训练只对 assistant JSON target 计算 loss，system/user/trajectory prompt token 的 label 均为 `-100`。每次训练都会写 TensorBoard 日志到 `logs/sft/李文博_<run_name>_<YYYYmmdd_HHMMSS>/`。
 
@@ -162,7 +156,7 @@ python scripts/train_lora.py --config configs/train_qwen35_fallback_lora_h800.ya
 
 ```bash
 python scripts/export_final_adapter.py \
-  --run-dir outputs/our_agentdog15_continued_lora \
+  --run-dir outputs/our_qwen35_continued_lora \
   --output-dir outputs/final_continued_lora_adapter
 ```
 
@@ -224,7 +218,7 @@ logs/only_eval/李文博_<run_name>_checkpoint_eval_<YYYYmmdd_HHMMSS>/
 
 ```bash
 python scripts/evaluate.py --method qwen35_08b_baseline
-python scripts/evaluate.py --method agentdog15_08b_reference
+python scripts/evaluate.py --method qwen35_08b_reference
 ```
 
 评测实现为 batch generate。默认 `eval_batch_size=64`，遇到 OOM 或 `canUse32BitIndexMath` 等可恢复错误时自动降到 32、16、8，并在 `summary.json` 中记录实际 batch size。
@@ -247,7 +241,7 @@ python scripts/evaluate.py \
 训练并导出 adapter 后：
 
 ```bash
-python scripts/evaluate.py --method our_agentdog15_continued_lora
+python scripts/evaluate.py --method our_qwen35_continued_lora
 python scripts/write_summary_csv.py
 ```
 
@@ -262,7 +256,7 @@ python scripts/write_summary_csv.py
 
 ```text
 outputs/baseline_qwen35_08b/
-outputs/reference_agentdog15_08b/
+outputs/reference_qwen35_08b/
 outputs/final_continued_lora/
 outputs/error_cases/
 outputs/summary.csv
