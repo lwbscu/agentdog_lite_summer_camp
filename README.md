@@ -12,7 +12,7 @@ outputs/qwen35_full_sft_llamafactory_h800/best_checkpoint
 最终推理输出严格限制为：
 
 ```json
-@@ -158,6 +166,58 @@ python scripts/export_final_adapter.py \
+ -158,6 +166,58 @@ python scripts/export_final_adapter.py \
 --output-dir outputs/final_continued_lora_adapter
 ```
 
