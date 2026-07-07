@@ -1,11 +1,29 @@
 # AgentDoG-Lite Summer Camp
 
-模型权重已公开上传至 Hugging Face：
-Full-SFT 
-完整权重版本为https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-full-sft
-LoRA adapter
-版本为https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-lora 
-两个版本均明确从基础模型 `Qwen/Qwen3.5-0.8B` 开始训练，而不是从官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` 初始化，官方 AgentDoG1.5 仅作为 reference 对照。
+模型权重与训练数据已公开上传至 Hugging Face。
+
+## 模型权重
+
+**Full-SFT 完整权重版本：**  
+https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-full-sft
+
+**LoRA adapter 版本：**  
+https://huggingface.co/hhhggfdd/doc-was-wrong-because-training-started-from-qwen3.5-0.8b-base-not-agentdog-lora
+
+LoRA adapter 是在上述 **Full-SFT 完整权重版本** 的基础上继续训练得到的，  
+而 Full-SFT 完整权重版本本身是从基础模型 `Qwen/Qwen3.5-0.8B` 开始训练。
+
+也就是说，训练链路为：
+
+`Qwen/Qwen3.5-0.8B` → `Full-SFT 完整权重` → `LoRA adapter`
+
+该训练链路不是从官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B` 初始化；  
+官方 AgentDoG1.5 仅作为 reference 对照。
+
+## 训练数据
+
+**训练数据套件：**  
+https://huggingface.co/datasets/hhhggfdd/agentdog-lite-qwen35-08b-base-training-data-suite
 
 本项目实现 AgentDoG-Lite 题目 1 的高标准方案：最终主线从基础模型 `Qwen/Qwen3.5-0.8B`（！！！！！结果是从基础模型Qwen3.5-0.8B开始训练，而不是agentdog！！！！！）开始训练，经过 Full-SFT与LoRA/SFT优化，构建面向 Agent 轨迹级安全判断的轻量模型。官方 `AI45Research/AgentDoG1.5-Qwen3.5-0.8B`，AgentDoG1.5作为对照模型，用于比较表现。
 
